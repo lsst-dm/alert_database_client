@@ -58,9 +58,13 @@ schema_url_expectations = [
     ("localhost", 1111, "http://localhost/v1/schemas/1111"),
 ]
 
+
 @pytest.mark.parametrize("case", schema_url_expectations)
 def test_get_schema_url(case):
     url, schema_id, expected = case
+    client = DatabaseClient(url)
+    have = client._get_schema_url(schema_id)
+    assert have == expected
 
 
 @pytest.fixture
@@ -114,6 +118,7 @@ def test_get_schema_404(mock_responses):
     client = DatabaseClient("http://testdb")
     with pytest.raises(requests.HTTPError):
         client.get_schema(2)
+
 
 def test_get_alert(mock_responses):
     schema = {
