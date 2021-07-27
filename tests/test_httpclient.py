@@ -104,7 +104,6 @@ def test_get_schema(mock_responses):
 
 
 def test_get_schema_404(mock_responses):
-    schema_body = b'{"type": "string"}'
     mock_responses.add(
         responses.GET, "http://testdb/v1/schemas/2",
         body=b"Not Found", status=404,
