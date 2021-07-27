@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import gzip
+import io
+import json
 
+import fastavro
 import pytest
 import requests
 import responses
@@ -48,11 +51,11 @@ def test_get_alert_url(case):
 
 schema_url_expectations = [
     # input base URL, input schema ID, expected output
-    ("https://alert-db.lsst.codes", "1111", "https://alert-db.lsst.codes/v1/schemas/1111"),
-    ("https://alert-db.lsst.codes/", "1111", "https://alert-db.lsst.codes/v1/schemas/1111"),
-    ("https://localhost/", "1111", "https://localhost/v1/schemas/1111"),
-    ("localhost/", "1111", "http://localhost/v1/schemas/1111"),
-    ("localhost", "1111", "http://localhost/v1/schemas/1111"),
+    ("https://alert-db.lsst.codes", 1111, "https://alert-db.lsst.codes/v1/schemas/1111"),
+    ("https://alert-db.lsst.codes/", 1111, "https://alert-db.lsst.codes/v1/schemas/1111"),
+    ("https://localhost/", 1111, "https://localhost/v1/schemas/1111"),
+    ("localhost/", 1111, "http://localhost/v1/schemas/1111"),
+    ("localhost", 1111, "http://localhost/v1/schemas/1111"),
 ]
 
 @pytest.mark.parametrize("case", schema_url_expectations)
@@ -99,7 +102,7 @@ def test_get_schema(mock_responses):
         content_type="application/vnd.schemaregistry.v1+json",
     )
     client = DatabaseClient("http://testdb")
-    have = client.get_schema("1111")
+    have = client.get_schema(1111)
     assert have == schema_body
 
 
@@ -110,4 +113,62 @@ def test_get_schema_404(mock_responses):
     )
     client = DatabaseClient("http://testdb")
     with pytest.raises(requests.HTTPError):
-        client.get_schema("2")
+        client.get_schema(2)
+
+def test_get_alert(mock_responses):
+    schema = {
+        "type": "record",
+        "name": "test-alert",
+        "fields": [
+            {"name": "alertId", "type": "long"},
+        ],
+    }
+    encoded_schema = json.dumps(schema)
+
+    alert = {"alertId": 81023}
+    encoded_alert_buffer = io.BytesIO()
+    encoded_alert_buffer.write(bytearray([0, 0, 0, 0, 1]))
+    fastavro.schemaless_writer(encoded_alert_buffer, schema, alert)
+    encoded_alert = gzip.compress(encoded_alert_buffer.getvalue())
+
+    mock_responses.add(
+        responses.GET,
+        "http://testdb/v1/schemas/1",
+        body=encoded_schema,
+        status=200,
+        content_type="application/vnd.schemaregistry.v1+json",
+    )
+
+    mock_responses.add(
+        responses.GET,
+        "http://testdb/v1/alerts/81023",
+        body=encoded_alert,
+        status=200,
+        content_type="application/octet-stream"
+    )
+
+    client = DatabaseClient("http://testdb")
+    have = client.get_alert("81023")
+    assert have == alert
+
+    # Get another alert using the same schema ID. The shcema URl should not get
+    # called again, since the client should cache the response.
+    assert mock_responses.assert_call_count("http://testdb/v1/schemas/1", 1) is True
+
+    alert2 = {"alertId": 81024}
+    encoded_alert_buffer2 = io.BytesIO()
+    encoded_alert_buffer2.write(bytearray([0, 0, 0, 0, 1]))
+    fastavro.schemaless_writer(encoded_alert_buffer2, schema, alert2)
+    encoded_alert2 = gzip.compress(encoded_alert_buffer2.getvalue())
+
+    mock_responses.add(
+        responses.GET,
+        "http://testdb/v1/alerts/81024",
+        body=encoded_alert2,
+        status=200,
+        content_type="application/octet-stream"
+    )
+
+    have = client.get_alert("81024")
+    assert have == alert2
+    assert mock_responses.assert_call_count("http://testdb/v1/schemas/1", 1) is True

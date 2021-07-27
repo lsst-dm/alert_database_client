@@ -18,11 +18,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-# import fastavro
-import requests
-import urllib
+import io
+import json
 import gzip
+import struct
+import urllib
+
+import fastavro
+import requests
 
 
 class DatabaseClient:
@@ -31,6 +34,8 @@ class DatabaseClient:
         if not parsed_url.scheme:
             url = "http://" + url
         self.url = url
+
+        self._schema_cache = {}
 
     def _get_alert_url(self, alert_id: str) -> str:
         return urllib.parse.urljoin(self.url, f"/v1/alerts/{alert_id}")
@@ -42,11 +47,35 @@ class DatabaseClient:
         decompressed = gzip.decompress(response.content)
         return decompressed
 
-    def _get_schema_url(self, schema_id: str) -> str:
+    def _get_schema_url(self, schema_id: int) -> str:
         return urllib.parse.urljoin(self.url, f"/v1/schemas/{schema_id}")
 
-    def get_schema(self, schema_id: str) -> bytes:
+    def get_schema(self, schema_id: int) -> bytes:
         url = self._get_schema_url(schema_id)
         response = requests.get(url)
         response.raise_for_status()
         return response.content
+
+    def get_alert(self, alert_id) -> dict:
+        raw_bytes = self.get_raw_alert_bytes(alert_id)
+        if len(raw_bytes) < 5:
+            raise ValueError("corrupted alert data is not in confluent wire format")
+        schema_id = self._parse_alert_header(raw_bytes)
+        alert_payload = raw_bytes[5:]
+        schema = self._get_parsed_schema(schema_id)
+        return fastavro.schemaless_reader(io.BytesIO(alert_payload), schema)
+
+    def _get_parsed_schema(self, schema_id: int) -> dict:
+        if schema_id in self._schema_cache:
+            return self._schema_cache[schema_id]
+        schema_bytes = self.get_schema(schema_id)
+        schema = fastavro.parse_schema(json.loads(schema_bytes))
+        self._schema_cache[schema_id] = schema
+        return schema
+
+    @staticmethod
+    def _parse_alert_header(alert_raw_bytes: bytes) -> int:
+        magic_byte = alert_raw_bytes[0]
+        assert magic_byte == 0
+        schema_id = struct.unpack(">I", alert_raw_bytes[1:5])[0]
+        return schema_id
