@@ -20,8 +20,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # import fastavro
-# import requests
+import requests
 import urllib
+import gzip
 
 
 class DatabaseClient:
@@ -34,5 +35,9 @@ class DatabaseClient:
     def _get_alert_url(self, alert_id: str) -> str:
         return urllib.parse.urljoin(self.url, f"/v1/alerts/{alert_id}")
 
-    def get_alert(self, alert_id: str) -> dict:
-        pass
+    def get_raw_alert_bytes(self, alert_id: str) -> bytes:
+        url = self._get_alert_url(alert_id)
+        response = requests.get(url)
+        response.raise_for_status()
+        decompressed = gzip.decompress(response.content)
+        return decompressed

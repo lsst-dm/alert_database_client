@@ -18,9 +18,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import gzip
+
+import pytest
+import requests
+import responses
 
 from lsst.alert.database.client import DatabaseClient
-import pytest
 
 alert_url_expectations = [
     # input base URL, input alertId, expected output
@@ -40,3 +44,30 @@ def test_alert_url_with_scheme(case):
     have = client._get_alert_url(alert_id)
 
     assert have == expected
+
+
+@pytest.fixture
+def mock_responses():
+    with responses.RequestsMock() as r:
+        yield r
+
+
+def test_get_alert(mock_responses):
+    # An alert that exists:
+    alert_body = b"zzz"
+    mock_responses.add(
+        responses.GET, "http://testdb/v1/alerts/1111",
+        body=gzip.compress(alert_body), status=200,
+        content_type="application/octet-stream",
+    )
+    # An alert that does not exist:
+    mock_responses.add(
+        responses.GET, "http://testdb/v1/alerts/2",
+        body=b"Not Found", status=404,
+    )
+    client = DatabaseClient("http://testdb/")
+    have = client.get_raw_alert_bytes("1111")
+    assert have == alert_body
+
+    with pytest.raises(requests.HTTPError):
+        client.get_raw_alert_bytes("2")
