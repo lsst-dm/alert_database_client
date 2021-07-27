@@ -37,7 +37,7 @@ alert_url_expectations = [
 
 
 @pytest.mark.parametrize("case", alert_url_expectations)
-def test_alert_url_with_scheme(case):
+def test_get_alert_url(case):
     url, alert_id, expected = case
 
     client = DatabaseClient(url)
@@ -46,28 +46,69 @@ def test_alert_url_with_scheme(case):
     assert have == expected
 
 
+schema_url_expectations = [
+    # input base URL, input schema ID, expected output
+    ("https://alert-db.lsst.codes", "1111", "https://alert-db.lsst.codes/v1/schemas/1111"),
+    ("https://alert-db.lsst.codes/", "1111", "https://alert-db.lsst.codes/v1/schemas/1111"),
+    ("https://localhost/", "1111", "https://localhost/v1/schemas/1111"),
+    ("localhost/", "1111", "http://localhost/v1/schemas/1111"),
+    ("localhost", "1111", "http://localhost/v1/schemas/1111"),
+]
+
+@pytest.mark.parametrize("case", schema_url_expectations)
+def test_get_schema_url(case):
+    url, schema_id, expected = case
+
+
 @pytest.fixture
 def mock_responses():
     with responses.RequestsMock() as r:
         yield r
 
 
-def test_get_alert(mock_responses):
-    # An alert that exists:
+def test_get_raw_alert_bytes(mock_responses):
     alert_body = b"zzz"
     mock_responses.add(
         responses.GET, "http://testdb/v1/alerts/1111",
         body=gzip.compress(alert_body), status=200,
         content_type="application/octet-stream",
     )
+    client = DatabaseClient("http://testdb/")
+    have = client.get_raw_alert_bytes("1111")
+    assert have == alert_body
+
+
+def test_get_raw_alert_bytes_404(mock_responses):
     # An alert that does not exist:
     mock_responses.add(
         responses.GET, "http://testdb/v1/alerts/2",
         body=b"Not Found", status=404,
     )
     client = DatabaseClient("http://testdb/")
-    have = client.get_raw_alert_bytes("1111")
-    assert have == alert_body
-
     with pytest.raises(requests.HTTPError):
         client.get_raw_alert_bytes("2")
+
+
+def test_get_schema(mock_responses):
+    schema_body = b'{"type": "string"}'
+    mock_responses.add(
+        responses.GET,
+        "http://testdb/v1/schemas/1111",
+        body=schema_body,
+        status=200,
+        content_type="application/vnd.schemaregistry.v1+json",
+    )
+    client = DatabaseClient("http://testdb")
+    have = client.get_schema("1111")
+    assert have == schema_body
+
+
+def test_get_schema_404(mock_responses):
+    schema_body = b'{"type": "string"}'
+    mock_responses.add(
+        responses.GET, "http://testdb/v1/schemas/2",
+        body=b"Not Found", status=404,
+    )
+    client = DatabaseClient("http://testdb")
+    with pytest.raises(requests.HTTPError):
+        client.get_schema("2")

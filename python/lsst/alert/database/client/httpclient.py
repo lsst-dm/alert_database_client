@@ -41,3 +41,12 @@ class DatabaseClient:
         response.raise_for_status()
         decompressed = gzip.decompress(response.content)
         return decompressed
+
+    def _get_schema_url(self, schema_id: str) -> str:
+        return urllib.parse.urljoin(self.url, f"/v1/schemas/{schema_id}")
+
+    def get_schema(self, schema_id: str) -> bytes:
+        url = self._get_schema_url(schema_id)
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.content
