@@ -30,8 +30,8 @@ import requests
 
 class Client:
     """
-    A client for the alert database. This client provides access to archived
-    alert packets and their schemas, fetching them over HTTP.
+    A client for the alert database. This client provides access to
+    archived alert packets and their schemas, fetching them over HTTP.
     """
 
     def __init__(self, url: str):
@@ -47,9 +47,11 @@ class Client:
 
     def get_raw_alert_bytes(self, alert_id: int) -> bytes:
         """
-        Get the verbatim raw bytes of an alert packet, as sent out over the alert stream.
+        Get the verbatim raw bytes of an alert packet, as sent out over the
+        alert stream.
 
-        These bytes are binary-encoded avro, prefixed with a 5-byte Confluent Wire Format header.
+        These bytes are binary-encoded avro, prefixed with a 5-byte
+        Confluent Wire Format header.
 
         Parameters
         ----------
@@ -73,14 +75,15 @@ class Client:
 
     def get_schema(self, schema_id: int) -> bytes:
         """
-        Get the raw bytes of a JSON document describing an alert packet schema.
+        Get the raw bytes of a JSON document describing an alert packet
+        schema.
 
-        The JSON document is suitable for being loaded with json.loads, and then
-        parsed as an Avro schema.
+        The JSON document is suitable for being loaded with json.loads,
+        and then parsed as an Avro schema.
 
-        The schema_id parameter is the unique ID of the alert packet schema.
-        This is the ID that is used in Confluent Wire Format header prefixes of
-        raw alert packets.
+        The schema_id parameter is the unique ID of the alert packet
+        schema. This is the ID that is used in Confluent Wire Format
+        header prefixes of raw alert packets.
 
         Parameters
         ----------
@@ -97,7 +100,11 @@ class Client:
         >>> import fastavro, json
         >>> client = Client("https://some_location/")
         >>> raw_bytes = client.get_raw_alert_bytes(12345)
-        >>> schema_id = int.from_bytes(raw_bytes[1:5], byteorder="big", signed=False)
+        >>> schema_id = int.from_bytes(
+        ...    raw_bytes[1:5],
+        ...    byteorder="big",
+        ...    signed=False,
+        ... )
         >>> raw_schema = client.get_schema(schema_id)
         >>> schema = fastavro.parse(json.loads(raw_schema))
         """
@@ -111,10 +118,11 @@ class Client:
         """
         Retrieve and deserialize an archived alert packet by ID.
 
-        This downloads a raw alert packet with Client.get_raw_alert_bytes. Then,
-        it uses the alert packet's schema ID to get the proper schema, and
-        deserializes the bytes, returning the unpacked dictionary structure for
-        the alert packet.
+        This downloads a raw alert packet with
+        Client.get_raw_alert_bytes. Then, it uses the alert packet's
+        schema ID to get the proper schema, and deserializes the bytes,
+        returning the unpacked dictionary structure for the alert
+        packet.
 
         Parameters
         ----------
