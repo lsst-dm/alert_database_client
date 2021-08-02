@@ -27,7 +27,7 @@ import pytest
 import requests
 import responses
 
-from lsst.alert.database.client import DatabaseClient
+from lsst.alert.database.client import Client
 
 alert_url_expectations = [
     # input base URL, input alertId, expected output
@@ -43,7 +43,7 @@ alert_url_expectations = [
 def test_get_alert_url(case):
     url, alert_id, expected = case
 
-    client = DatabaseClient(url)
+    client = Client(url)
     have = client._get_alert_url(alert_id)
 
     assert have == expected
@@ -62,7 +62,7 @@ schema_url_expectations = [
 @pytest.mark.parametrize("case", schema_url_expectations)
 def test_get_schema_url(case):
     url, schema_id, expected = case
-    client = DatabaseClient(url)
+    client = Client(url)
     have = client._get_schema_url(schema_id)
     assert have == expected
 
@@ -80,7 +80,7 @@ def test_get_raw_alert_bytes(mock_responses):
         body=gzip.compress(alert_body), status=200,
         content_type="application/octet-stream",
     )
-    client = DatabaseClient("http://testdb/")
+    client = Client("http://testdb/")
     have = client.get_raw_alert_bytes(1111)
     assert have == alert_body
 
@@ -91,7 +91,7 @@ def test_get_raw_alert_bytes_404(mock_responses):
         responses.GET, "http://testdb/v1/alerts/2",
         body=b"Not Found", status=404,
     )
-    client = DatabaseClient("http://testdb/")
+    client = Client("http://testdb/")
     with pytest.raises(requests.HTTPError):
         client.get_raw_alert_bytes(2)
 
@@ -105,7 +105,7 @@ def test_get_schema(mock_responses):
         status=200,
         content_type="application/vnd.schemaregistry.v1+json",
     )
-    client = DatabaseClient("http://testdb")
+    client = Client("http://testdb")
     have = client.get_schema(1111)
     assert have == schema_body
 
@@ -115,7 +115,7 @@ def test_get_schema_404(mock_responses):
         responses.GET, "http://testdb/v1/schemas/2",
         body=b"Not Found", status=404,
     )
-    client = DatabaseClient("http://testdb")
+    client = Client("http://testdb")
     with pytest.raises(requests.HTTPError):
         client.get_schema(2)
 
@@ -152,7 +152,7 @@ def test_get_alert(mock_responses):
         content_type="application/octet-stream"
     )
 
-    client = DatabaseClient("http://testdb")
+    client = Client("http://testdb")
     have = client.get_alert(81023)
     assert have == alert
 
@@ -180,7 +180,7 @@ def test_get_alert(mock_responses):
 
 
 def test_parse_alert_header():
-    client = DatabaseClient("http://testdb")
+    client = Client("http://testdb")
     header = b'\x00\x00\x00\x00\x00'
     parsed_id = client._parse_alert_header(header)
     assert parsed_id == 0

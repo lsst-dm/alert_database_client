@@ -28,7 +28,7 @@ import fastavro
 import requests
 
 
-class DatabaseClient:
+class Client:
     def __init__(self, url: str):
         parsed_url = urllib.parse.urlparse(url)
         if not parsed_url.scheme:
