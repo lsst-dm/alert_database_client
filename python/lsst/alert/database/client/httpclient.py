@@ -37,10 +37,10 @@ class DatabaseClient:
 
         self._schema_cache = {}
 
-    def _get_alert_url(self, alert_id: str) -> str:
+    def _get_alert_url(self, alert_id: int) -> str:
         return urllib.parse.urljoin(self.url, f"/v1/alerts/{alert_id}")
 
-    def get_raw_alert_bytes(self, alert_id: str) -> bytes:
+    def get_raw_alert_bytes(self, alert_id: int) -> bytes:
         url = self._get_alert_url(alert_id)
         response = requests.get(url)
         response.raise_for_status()
@@ -56,7 +56,7 @@ class DatabaseClient:
         response.raise_for_status()
         return response.content
 
-    def get_alert(self, alert_id) -> dict:
+    def get_alert(self, alert_id: int) -> dict:
         raw_bytes = self.get_raw_alert_bytes(alert_id)
         if len(raw_bytes) < 5:
             raise ValueError("corrupted alert data is not in confluent wire format")
@@ -75,7 +75,12 @@ class DatabaseClient:
 
     @staticmethod
     def _parse_alert_header(alert_raw_bytes: bytes) -> int:
+        if len(alert_raw_bytes) < 5:
+            raise ValueError("alert header too short - should be at least 5 bytes")
         magic_byte = alert_raw_bytes[0]
-        assert magic_byte == 0
+        if magic_byte != 0:
+            raise ValueError(
+                "alert header has incorrect magic byte, might be corrupted"
+            )
         schema_id = struct.unpack(">I", alert_raw_bytes[1:5])[0]
         return schema_id

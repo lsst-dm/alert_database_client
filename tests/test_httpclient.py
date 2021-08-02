@@ -31,11 +31,11 @@ from lsst.alert.database.client import DatabaseClient
 
 alert_url_expectations = [
     # input base URL, input alertId, expected output
-    ("https://alert-db.lsst.codes", "1111", "https://alert-db.lsst.codes/v1/alerts/1111"),
-    ("https://alert-db.lsst.codes/", "1111", "https://alert-db.lsst.codes/v1/alerts/1111"),
-    ("https://localhost/", "1111", "https://localhost/v1/alerts/1111"),
-    ("localhost/", "1111", "http://localhost/v1/alerts/1111"),
-    ("localhost", "1111", "http://localhost/v1/alerts/1111"),
+    ("https://alert-db.lsst.codes", 1111, "https://alert-db.lsst.codes/v1/alerts/1111"),
+    ("https://alert-db.lsst.codes/", 1111, "https://alert-db.lsst.codes/v1/alerts/1111"),
+    ("https://localhost/", 1111, "https://localhost/v1/alerts/1111"),
+    ("localhost/", 1111, "http://localhost/v1/alerts/1111"),
+    ("localhost", 1111, "http://localhost/v1/alerts/1111"),
 ]
 
 
@@ -81,7 +81,7 @@ def test_get_raw_alert_bytes(mock_responses):
         content_type="application/octet-stream",
     )
     client = DatabaseClient("http://testdb/")
-    have = client.get_raw_alert_bytes("1111")
+    have = client.get_raw_alert_bytes(1111)
     assert have == alert_body
 
 
@@ -93,7 +93,7 @@ def test_get_raw_alert_bytes_404(mock_responses):
     )
     client = DatabaseClient("http://testdb/")
     with pytest.raises(requests.HTTPError):
-        client.get_raw_alert_bytes("2")
+        client.get_raw_alert_bytes(2)
 
 
 def test_get_schema(mock_responses):
@@ -153,7 +153,7 @@ def test_get_alert(mock_responses):
     )
 
     client = DatabaseClient("http://testdb")
-    have = client.get_alert("81023")
+    have = client.get_alert(81023)
     assert have == alert
 
     # Get another alert using the same schema ID. The shcema URl should not get
@@ -174,6 +174,32 @@ def test_get_alert(mock_responses):
         content_type="application/octet-stream"
     )
 
-    have = client.get_alert("81024")
+    have = client.get_alert(81024)
     assert have == alert2
     assert mock_responses.assert_call_count("http://testdb/v1/schemas/1", 1) is True
+
+
+def test_parse_alert_header():
+    client = DatabaseClient("http://testdb")
+    header = b'\x00\x00\x00\x00\x00'
+    parsed_id = client._parse_alert_header(header)
+    assert parsed_id == 0
+
+    header = b'\x00\x00\x00\x00\x09'
+    parsed_id = client._parse_alert_header(header)
+    assert parsed_id == 9
+
+    with pytest.raises(ValueError):
+        # Empty string
+        header = b""
+        client._parse_alert_header(header)
+
+    with pytest.raises(ValueError):
+        # Too short
+        header = b"\x00\x00\x00"
+        client._parse_alert_header(header)
+
+    with pytest.raises(ValueError):
+        # Wrong magic byte
+        header = b"\x01\x00\x00\x00\x00"
+        client._parse_alert_header(header)
