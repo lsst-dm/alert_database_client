@@ -29,6 +29,11 @@ import requests
 
 
 class Client:
+    """
+    A client for the alert database. This client provides access to archived
+    alert packets and their schemas, fetching them over HTTP.
+    """
+
     def __init__(self, url: str):
         parsed_url = urllib.parse.urlparse(url)
         if not parsed_url.scheme:
@@ -41,6 +46,22 @@ class Client:
         return urllib.parse.urljoin(self.url, f"/v1/alerts/{alert_id}")
 
     def get_raw_alert_bytes(self, alert_id: int) -> bytes:
+        """
+        Get the verbatim raw bytes of an alert packet, as sent out over the alert stream.
+
+        These bytes are binary-encoded avro, prefixed with a 5-byte Confluent Wire Format header.
+
+        Parameters
+        ----------
+        alert_id : int
+            The alertId of the packet to retrieve.
+
+        Returns
+        -------
+        bytes
+            The bytes that were sent when the packet was published.
+        """
+
         url = self._get_alert_url(alert_id)
         response = requests.get(url)
         response.raise_for_status()
@@ -51,12 +72,72 @@ class Client:
         return urllib.parse.urljoin(self.url, f"/v1/schemas/{schema_id}")
 
     def get_schema(self, schema_id: int) -> bytes:
+        """
+        Get the raw bytes of a JSON document describing an alert packet schema.
+
+        The JSON document is suitable for being loaded with json.loads, and then
+        parsed as an Avro schema.
+
+        The schema_id parameter is the unique ID of the alert packet schema.
+        This is the ID that is used in Confluent Wire Format header prefixes of
+        raw alert packets.
+
+        Parameters
+        ----------
+        schema_id : int
+            The ID of the schema document to retrieve.
+
+        Returns
+        -------
+        bytes
+            UTF-8 JSON schema definition.
+
+        Examples
+        --------
+        >>> import fastavro, json
+        >>> client = Client("https://some_location/")
+        >>> raw_bytes = client.get_raw_alert_bytes(12345)
+        >>> schema_id = int.from_bytes(raw_bytes[1:5], byteorder="big", signed=False)
+        >>> raw_schema = client.get_schema(schema_id)
+        >>> schema = fastavro.parse(json.loads(raw_schema))
+        """
+
         url = self._get_schema_url(schema_id)
         response = requests.get(url)
         response.raise_for_status()
         return response.content
 
     def get_alert(self, alert_id: int) -> dict:
+        """
+        Retrieve and deserialize an archived alert packet by ID.
+
+        This downloads a raw alert packet with Client.get_raw_alert_bytes. Then,
+        it uses the alert packet's schema ID to get the proper schema, and
+        deserializes the bytes, returning the unpacked dictionary structure for
+        the alert packet.
+
+        Parameters
+        ----------
+        alert_id : int
+            The alertId of the alert packet to retrieve.
+
+        Returns
+        -------
+        dict
+            A fully deserialized alert packet.
+
+        Raises
+        ------
+        ValueError
+            If the alert packet is corrupted.
+
+        Examples
+        --------
+        >>> client = Client("https://some_location")
+        >>> packet = client.get_alert(68214)
+        >>> ra, dec = packet["diaSource"]["ra"], packet["diaSource"]["dec"]
+        """
+
         raw_bytes = self.get_raw_alert_bytes(alert_id)
         if len(raw_bytes) < 5:
             raise ValueError("corrupted alert data is not in confluent wire format")
