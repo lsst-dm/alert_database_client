@@ -168,8 +168,6 @@ class Client:
             raise ValueError("alert header too short - should be at least 5 bytes")
         magic_byte = alert_raw_bytes[0]
         if magic_byte != 0:
-            raise ValueError(
-                "alert header has incorrect magic byte, might be corrupted"
-            )
+            raise ValueError("alert header has incorrect magic byte, might be corrupted")
         schema_id = struct.unpack(">I", alert_raw_bytes[1:5])[0]
         return schema_id
